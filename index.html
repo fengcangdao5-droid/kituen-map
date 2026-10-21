@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>喫煙所マップ</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* ログイン・登録モーダルのスタイル */
+        #login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-card {
+            background: white;
+            padding: 25px 20px;
+            border-radius: 12px;
+            width: 85%;
+            max-width: 360px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #888;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .auth-tab.active {
+            color: #27ae60;
+            border-bottom: 2px solid #27ae60;
+        }
+        .login-input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 10px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        .login-btn:hover {
+            background: #219150;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 最初に表示されるログイン / 新規登録画面 (オーバーレイ) -->
+    <div id="login-modal">
+        <div class="login-card">
+            <h2 style="margin-top:0; color:#333;">🚬 喫煙所マップ</h2>
+            
+            <!-- ログイン・新規登録 切替タブ -->
+            <div class="auth-tabs">
+                <div id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">ログイン</div>
+                <div id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">新規登録</div>
+            </div>
+
+            <input type="text" id="login-username" class="login-input" placeholder="ユーザー名" required>
+            <input type="password" id="login-password" class="login-input" placeholder="パスワード" required>
+            
+            <button id="auth-submit-btn" class="login-btn" onclick="handleAuthSubmit()">ログイン</button>
+            
+            <p id="auth-hint" style="font-size: 12px; color: #888; margin-top: 15px;">
+                登録済みのユーザー名とパスワードを入力してください
+            </p>
+        </div>
+    </div>
+
+    <!-- スマートなフローティングメニュー -->
+    <div id="fab-container" style="position: absolute; bottom: 25px; left: 20px; z-index: 1000;">
+        <!-- 展開されるメニュー項目群 -->
+        <div id="fab-menu" style="display: flex; flex-direction: column-reverse; gap: 10px; margin-bottom: 12px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: all 0.3s ease;">
+            <!-- ルート案内中のみ一番下（メニュー展開時の最下部）に表示される中止ボタン -->
+            <button id="cancel-route-btn" class="menu-item-btn" onclick="clearRoute()" style="display: none; background-color: #e74c3c; color: white;">🛑 ルート案内を中止</button>
+            <button class="menu-item-btn" onclick="handleLogout()" style="background: #7f8c8d; color: white;">🚪 ログアウト</button>
+            <button class="menu-item-btn" onclick="toggleChangeNameModal()" style="background: #2980b9; color: white;">⚙️ ユーザー名変更</button>
+            <button class="menu-item-btn" onclick="toggleAddPinMode()" style="background: white; color: #333; border: 1px solid #ccc;" id="add-pin-btn">📍 新規喫煙所を打つ</button>
+            <button class="menu-item-btn" onclick="toggleBrandModal()" style="background: #34495e; color: white;">🚬 お気に入り銘柄</button>
+            <button class="menu-item-btn" onclick="toggleFavModal()" style="background: #f39c12; color: white;">⭐ 保存した場所</button>
+            <button class="menu-item-btn" onclick="toggleUserListModal()" style="background: #2c3e50; color: white;">👥 ユーザー一覧</button>
+        </div>
+
+        <!-- トグル用メインボタン -->
+        <button id="fab-toggle-btn" onclick="toggleFabMenu()" style="width: 50px; height: 50px; border-radius: 50%; background: #27ae60; color: white; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-size: 24px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: transform 0.3s ease;">
+            <span class="material-icons" id="fab-icon">menu</span>
+        </button>
+    </div>
+
+    <!-- ルート案内中止ボタン（単独配置） -->
+    <button id="cancel-route-btn" onclick="clearRoute()" style="display: none; position: absolute; bottom: 85px; left: 20px; z-index: 1000; background-color: #e74c3c; color: white; border: none; padding: 10px 18px; border-radius: 20px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">🛑 ルート案内を中止</button>
+
+    <!-- 👥 ユーザー一覧モーダル -->
+    <div id="user-list-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2500; justify-content: center; align-items: center;">
+        <div style="background: white; width: 90%; max-width: 480px; padding: 20px; border-radius: 12px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; display: flex; justify-content: space-between; align-items: center; color: #2c3e50;">
+                <span>👥 ユーザー一覧</span>
+                <span onclick="toggleUserListModal()" style="cursor: pointer; font-size: 24px; color: #888;">&times;</span>
+            </h2>
+
+            <!-- ユーザーリスト表示エリア -->
+            <div id="user-list-container">
+                <p style="color: #666; text-align: center;">読み込み中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ⚙️ ユーザー名変更モーダル -->
+    <div id="change-name-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2500; justify-content: center; align-items: center;">
+        <div style="background: white; width: 85%; max-width: 360px; padding: 20px; border-radius: 12px; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center;">
+            <h3 style="margin-top: 0; color: #2c3e50;">⚙️ ユーザー名の変更</h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 15px;">新しいユーザー名を入力してください</p>
+            
+            <input type="text" id="new-username-input" placeholder="新しいユーザー名" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; font-size: 14px;">
+            
+            <div style="display: flex; gap: 10px;">
+                <button onclick="toggleChangeNameModal()" style="flex: 1; padding: 10px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer;">キャンセル</button>
+                <button onclick="updateUsername()" style="flex: 1; padding: 10px; border: none; background: #2980b9; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;">変更する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ⭐ 保存した場所モーダル -->
+    <div id="fav-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="toggleFavModal()">&times;</span>
+            <h2>⭐ 保存した場所</h2>
+            <div id="fav-list-container"></div>
+        </div>
+    </div>
+
+    <!-- 🚬 お気に入り銘柄一覧モーダル -->
+    <div id="brand-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="toggleBrandModal()">&times;</span>
+            
+            <h2>🚬 お気に入り銘柄一覧</h2>
+            
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: left;">
+                <h3 style="margin-top: 0; color: #333;">新しいお気に入り銘柄登録</h3>
+                <input type="text" id="new-brand-name" placeholder="銘柄名（必須）" style="width:90%; padding:8px; margin-bottom:5px; border: 1px solid #ccc; border-radius: 4px;"><br>
+                <input type="text" id="new-brand-company" placeholder="メーカー名" style="width:90%; padding:8px; margin-bottom:5px; border: 1px solid #ccc; border-radius: 4px;"><br>
+                <input type="text" id="new-brand-price" placeholder="価格（半角数字のみ 例: 600）" style="width:90%; padding:8px; margin-bottom:5px; border: 1px solid #ccc; border-radius: 4px;"><br>
+                <input type="text" id="new-brand-desc" placeholder="特徴・説明" style="width:90%; padding:8px; margin-bottom:10px; border: 1px solid #ccc; border-radius: 4px;"><br>
+                <button onclick="addBrand()" style="padding: 8px 20px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 4px; font-weight: bold;">銘柄を追加する</button>
+            </div>
+
+            <div id="brand-list-container" style="text-align: left;"></div>
+        </div>
+    </div>
+
+    <!-- 🎉 到着通知用モーダル -->
+    <div id="arrival-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <h3 style="margin-top: 0; color: #27ae60;">🎉 到着しました！</h3>
+            <p style="font-size: 14px; color: #444; margin-bottom: 20px;">目的地周辺（20m圏内）に接近しました。<br>ルート案内を終了しますか？</p>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="dismissArrivalModal()" style="flex: 1; padding: 10px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; cursor: pointer;">継続する</button>
+                <button onclick="confirmArrivalFinish()" style="flex: 1; padding: 10px; border: none; background: #e74c3c; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;">ルート消去</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/lrm-localization.js"></script> 
+    <script src="script.js?v=3"></script> 
+</body>
+</html>
